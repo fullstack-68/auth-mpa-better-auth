@@ -1,70 +1,65 @@
-import {
-  text,
-  integer,
-  sqliteTable,
-  primaryKey,
-} from "drizzle-orm/sqlite-core";
-import { nanoid } from "nanoid";
-import { relations } from "drizzle-orm";
+import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
 
-export const usersTable = sqliteTable("users", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => nanoid()),
-  name: text("name"),
-  email: text("email").unique().notNull(),
-  password: text("password"), // I remove not null options.
-  isAdmin: integer("is_admin", { mode: "boolean" }).notNull().default(false),
-  avatarURL: text("avatar_url"),
-  createdAt: integer("created_at", { mode: "timestamp_ms" }).$default(
-    () => new Date()
+export const user = sqliteTable("user", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  emailVerified: integer("email_verified", { mode: "boolean" })
+    .$defaultFn(() => false)
+    .notNull(),
+  image: text("image"),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .$defaultFn(() => /* @__PURE__ */ new Date())
+    .notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+    .$defaultFn(() => /* @__PURE__ */ new Date())
+    .notNull(),
+});
+
+export const session = sqliteTable("session", {
+  id: text("id").primaryKey(),
+  expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+  token: text("token").notNull().unique(),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+});
+
+export const account = sqliteTable("account", {
+  id: text("id").primaryKey(),
+  accountId: text("account_id").notNull(),
+  providerId: text("provider_id").notNull(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  accessToken: text("access_token"),
+  refreshToken: text("refresh_token"),
+  idToken: text("id_token"),
+  accessTokenExpiresAt: integer("access_token_expires_at", {
+    mode: "timestamp",
+  }),
+  refreshTokenExpiresAt: integer("refresh_token_expires_at", {
+    mode: "timestamp",
+  }),
+  scope: text("scope"),
+  password: text("password"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
+export const verification = sqliteTable("verification", {
+  id: text("id").primaryKey(),
+  identifier: text("identifier").notNull(),
+  value: text("value").notNull(),
+  expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+    () => /* @__PURE__ */ new Date(),
+  ),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+    () => /* @__PURE__ */ new Date(),
   ),
 });
-
-export const usersRelations = relations(usersTable, ({ many }) => ({
-  accounts: many(accountsTable),
-}));
-
-export type ProviderType = "GITHUB" | "DISCORD" | "GOOGLE";
-
-export const accountsTable = sqliteTable(
-  "accounts",
-  {
-    id: text("id")
-      .$defaultFn(() => nanoid())
-      .notNull()
-      .unique(),
-    userId: text("user_id").notNull(),
-    provider: text("provider", {
-      enum: ["GITHUB", "DISCORD", "GOOGLE"],
-    }).notNull(),
-    providerAccountId: text("provider_account").notNull(),
-    profile: text("profile", { mode: "json" }),
-    accessToken: text("access_token"),
-    refreshToken: text("refresh_token"),
-  },
-  // I add composite key so that each user can have only one provider type.
-  (table) => {
-    return {
-      id: primaryKey({ columns: [table.userId, table.provider] }),
-    };
-  }
-);
-
-export const accountsRelations = relations(accountsTable, ({ one }) => ({
-  user: one(usersTable, {
-    fields: [accountsTable.userId],
-    references: [usersTable.id],
-  }),
-}));
-
-export const sessionsTable = sqliteTable("sessions", {
-  sid: text("sid").primaryKey(),
-  expired: integer("expired"),
-  sess: text("sess", { mode: "json" }),
-});
-
-// For constructing user-data object to pass around
-type UTI = typeof usersTable.$inferInsert;
-type ATI = typeof accountsTable.$inferInsert;
-export type UserData = UTI & ATI;
